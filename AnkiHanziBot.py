@@ -36,6 +36,179 @@ def fetch_dong_chinese_data(word):
         click.echo(f"❌ Error fetching data: {e}", err=True)
         return {'pinyin': '', 'meaning': ''}
 
+def fetch_stroke_order_data(word):
+    """Fetch stroke order images from StrokeOrder.com"""
+    # For compound words (more than 1 character), fetch stroke order for each character
+    if len(word) > 1:
+        click.echo(f"🖌️ Detected compound word '{word}' with {len(word)} characters")
+        click.echo(f"📝 Fetching stroke order for each character: {' + '.join(list(word))}")
+        
+        animated_gifs_html = []
+        step_by_step_html = []
+        
+        for i, char in enumerate(word):
+            click.echo(f"\n--- Processing character {i+1}/{len(word)}: '{char}' ---")
+            char_data = fetch_single_character_stroke_order(char)
+            
+            # Extract just the filename from the URL for the src attribute
+            if char_data['animated_gif'] != '[animated stroke order not found]':
+                gif_filename = char_data['animated_gif'].split('/')[-1]
+                animated_gifs_html.append(f'<img alt="{char} Stroke Order Animation" src="{gif_filename}">')
+            
+            if char_data['step_by_step'] != '[step-by-step guide not found]':
+                png_filename = char_data['step_by_step'].split('/')[-1]
+                step_by_step_html.append(f'<img alt="Standard stroke order for the Chinese character {char}" src="{png_filename}">')
+        
+        # Combine animated GIFs first, then step-by-step PNGs, separated by <br>
+        stroke_order_html = ""
+        if animated_gifs_html:
+            stroke_order_html += ''.join(animated_gifs_html)
+        if step_by_step_html:
+            if animated_gifs_html:
+                stroke_order_html += '<br>'
+            stroke_order_html += ''.join(step_by_step_html)
+        
+        return {
+            'stroke_order_html': stroke_order_html if stroke_order_html else '[stroke order not available for compound words]'
+        }
+    else:
+        # Single character - fetch normally
+        char_data = fetch_single_character_stroke_order(word)
+        
+        stroke_order_html = ""
+        
+        # Add animated GIF
+        if char_data['animated_gif'] != '[animated stroke order not found]':
+            gif_filename = char_data['animated_gif'].split('/')[-1]
+            stroke_order_html += f'<img alt="{word} Stroke Order Animation" src="{gif_filename}">'
+        
+        # Add step-by-step PNG
+        if char_data['step_by_step'] != '[step-by-step guide not found]':
+            png_filename = char_data['step_by_step'].split('/')[-1]
+            if stroke_order_html:
+                stroke_order_html += '<br>'
+            stroke_order_html += f'<img alt="Standard stroke order for the Chinese character {word}" src="{png_filename}">'
+        
+        return {
+            'stroke_order_html': stroke_order_html if stroke_order_html else '[stroke order not available]'
+        }
+
+def fetch_single_character_stroke_order(char):
+    """Fetch stroke order for a single character"""
+    try:
+        encoded_char = quote(char)
+        url = f"https://www.strokeorder.com/chinese/{encoded_char}"
+        
+        click.echo(f"🖌️ Fetching stroke order for '{char}' from StrokeOrder.com...")
+        click.echo(f"📍 URL: {url}")
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        click.echo(f"✅ Got stroke order response for '{char}', status: {response.status_code}")
+        
+        return parse_stroke_order_html(response.text, url)
+        
+    except requests.RequestException as e:
+        click.echo(f"❌ Error fetching stroke order for '{char}': {e}", err=True)
+        return {'animated_gif': '[animated stroke order not found]', 'step_by_step': '[step-by-step guide not found]'}
+
+def parse_stroke_order_html(html_content, base_url):
+    """Parse HTML content from StrokeOrder.com to extract stroke order images"""
+    try:
+        click.echo("🖌️ Parsing stroke order HTML...")
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        animated_gif = ''
+        step_by_step = ''
+        
+        # Look for images within stroke-article-content divs
+        content_divs = soup.find_all('div', class_='stroke-article-content')
+        click.echo(f"🔍 Found {len(content_divs)} stroke-article-content divs")
+        
+        for div in content_divs:
+            img = div.find('img')
+            if img:
+                src = img.get('src', '')
+                alt = img.get('alt', '')
+                title = img.get('title', '')
+                
+                click.echo(f"🖼️ Found image: src='{src}', alt='{alt}', title='{title}'")
+                
+                # Check for animated stroke order GIF
+                if 'stroke order animation' in alt.lower() or 'stroke order animation' in title.lower():
+                    # Convert relative path to absolute URL
+                    if src.startswith('./'):
+                        # Remove the ./ and any path components, keep just the filename
+                        filename = src.split('/')[-1]
+                        animated_gif = f"https://www.strokeorder.com/assets/bishun/gif/{filename}"
+                    elif src.startswith('/'):
+                        animated_gif = f"https://www.strokeorder.com{src}"
+                    else:
+                        animated_gif = src
+                    click.echo(f"🎬 Found animated stroke order: {animated_gif}")
+                
+                # Check for step-by-step handwriting guide (standard stroke order)
+                elif 'standard stroke order' in alt.lower() or 'standard stroke order' in title.lower():
+                    # Convert relative path to absolute URL
+                    if src.startswith('./'):
+                        # Remove the ./ and any path components, keep just the filename
+                        filename = src.split('/')[-1]
+                        step_by_step = f"https://www.strokeorder.com/assets/bishun/png/{filename}"
+                    elif src.startswith('/'):
+                        step_by_step = f"https://www.strokeorder.com{src}"
+                    else:
+                        step_by_step = src
+                    click.echo(f"📝 Found step-by-step guide: {step_by_step}")
+        
+        # Fallback: if we didn't find them by alt text, look for .gif and .png files
+        if not animated_gif or not step_by_step:
+            click.echo("🔍 Fallback: searching for stroke order images by file patterns...")
+            
+            all_images = soup.find_all('img')
+            for img in all_images:
+                src = img.get('src', '')
+                if src:
+                    # Look for animated GIF
+                    if not animated_gif and src.endswith('.gif'):
+                        if src.startswith('./'):
+                            filename = src.split('/')[-1]
+                            animated_gif = f"https://www.strokeorder.com/assets/bishun/gif/{filename}"
+                        elif src.startswith('/'):
+                            animated_gif = f"https://www.strokeorder.com{src}"
+                        else:
+                            animated_gif = src
+                        click.echo(f"🎬 Found animated stroke order by pattern: {animated_gif}")
+                    
+                    # Look for step-by-step PNG (look for patterns like "23383(1).png")
+                    elif not step_by_step and src.endswith('.png') and '(' in src:
+                        if src.startswith('./'):
+                            filename = src.split('/')[-1]
+                            step_by_step = f"https://www.strokeorder.com/assets/bishun/png/{filename}"
+                        elif src.startswith('/'):
+                            step_by_step = f"https://www.strokeorder.com{src}"
+                        else:
+                            step_by_step = src
+                        click.echo(f"📝 Found step-by-step guide by pattern: {step_by_step}")
+        
+        return {
+            'animated_gif': animated_gif if animated_gif else '[animated stroke order not found]',
+            'step_by_step': step_by_step if step_by_step else '[step-by-step guide not found]'
+        }
+        
+    except Exception as e:
+        click.echo(f"⚠️ Error parsing stroke order data: {e}")
+        import traceback
+        click.echo(f"📋 Full error: {traceback.format_exc()}")
+        return {
+            'animated_gif': '[parsing error]',
+            'step_by_step': '[parsing error]'
+        }
+
 def parse_dong_chinese_html(html_content):
     """Parse HTML content from Dong Chinese to extract pinyin and meaning"""
     try:
@@ -130,7 +303,7 @@ def generate_guid():
     """Generate a unique GUID for the Anki card"""
     return str(uuid.uuid4()).replace('-', '')[:10]
 
-def create_anki_card_output(hanzi, yingyu="", pinyin="", fayin="", lizi="", char_explanation="", stroke_orders=""):
+def create_anki_card_output(hanzi, yingyu="", pinyin="", fayin="", lizi="", char_explanation="", stroke_order_html=""):
     """Create Anki card data matching your actual Anki field names"""
     
     # Card data structure matching your actual Anki fields
@@ -144,7 +317,7 @@ def create_anki_card_output(hanzi, yingyu="", pinyin="", fayin="", lizi="", char
         '英语': yingyu,
         'Lì zi (Zhōngwén)': lizi,
         'Character Explanation': char_explanation,
-        'Stroke Orders': stroke_orders,
+        'Stroke Orders': stroke_order_html,
         'tags': 'Mandarin::Words::Compound'
     }
     
@@ -219,7 +392,10 @@ def main():
             # Fetch data from Dong Chinese
             dong_data = fetch_dong_chinese_data(word)
             
-            # Create a card with real pinyin and meaning data
+            # Fetch stroke order data
+            stroke_data = fetch_stroke_order_data(word)
+            
+            # Create a card with real pinyin, meaning, and stroke order data
             card_data = create_anki_card_output(
                 hanzi=word,
                 yingyu=dong_data['meaning'],
@@ -227,7 +403,7 @@ def main():
                 fayin="[audio placeholder]",
                 lizi="[example sentence placeholder]",
                 char_explanation="[character explanation placeholder]",
-                stroke_orders="[stroke orders placeholder]"
+                stroke_order_html=stroke_data['stroke_order_html']
             )
             
             # Display the card
