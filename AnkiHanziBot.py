@@ -36,61 +36,148 @@ def fetch_dong_chinese_data(word):
         click.echo(f"❌ Error fetching data: {e}", err=True)
         return {'pinyin': '', 'meaning': ''}
 
+
+import os
+import requests
+from urllib.parse import urlparse
+
+def download_stroke_order_images(stroke_data, download_dir="stroke_order_images"):
+    """Download stroke order images and return local paths"""
+    try:
+        # Create download directory if it doesn't exist
+        if not os.path.exists(download_dir):
+            os.makedirs(download_dir)
+            click.echo(f"📁 Created directory: {download_dir}")
+        
+        downloaded_files = {}
+        
+        # Download animated GIF
+        if stroke_data.get('animated_gif') and not stroke_data['animated_gif'].startswith('['):
+            gif_url = stroke_data['animated_gif']
+            gif_filename = extract_filename_from_url(gif_url)
+            gif_path = os.path.join(download_dir, gif_filename)
+            
+            if download_image(gif_url, gif_path):
+                downloaded_files['animated_gif'] = gif_filename
+                click.echo(f"🎬 Downloaded animated GIF: {gif_filename}")
+            else:
+                downloaded_files['animated_gif'] = '[download failed]'
+        
+        # Download step-by-step PNG
+        if stroke_data.get('step_by_step') and not stroke_data['step_by_step'].startswith('['):
+            png_url = stroke_data['step_by_step']
+            png_filename = extract_filename_from_url(png_url)
+            png_path = os.path.join(download_dir, png_filename)
+            
+            if download_image(png_url, png_path):
+                downloaded_files['step_by_step'] = png_filename
+                click.echo(f"📝 Downloaded step-by-step PNG: {png_filename}")
+            else:
+                downloaded_files['step_by_step'] = '[download failed]'
+        
+        return downloaded_files
+        
+    except Exception as e:
+        click.echo(f"❌ Error downloading images: {e}")
+        return {'animated_gif': '[download error]', 'step_by_step': '[download error]'}
+
+def extract_filename_from_url(url):
+    """Extract filename from URL"""
+    parsed_url = urlparse(url)
+    filename = os.path.basename(parsed_url.path)
+    return filename if filename else 'unknown_file'
+
+def download_image(url, local_path):
+    """Download a single image file"""
+    try:
+        # Check if file already exists
+        if os.path.exists(local_path):
+            click.echo(f"📁 File already exists: {os.path.basename(local_path)}")
+            return True
+        
+        click.echo(f"⬇️ Downloading: {url}")
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        # Save the file
+        with open(local_path, 'wb') as f:
+            f.write(response.content)
+        
+        click.echo(f"✅ Downloaded: {os.path.basename(local_path)} ({len(response.content)} bytes)")
+        return True
+        
+    except Exception as e:
+        click.echo(f"❌ Failed to download {url}: {e}")
+        return False
+
+def create_stroke_order_html_with_downloads(downloaded_files):
+    """Create HTML for stroke orders using downloaded filenames"""
+    html_parts = []
+    
+    # Add animated GIF if available
+    if downloaded_files.get('animated_gif') and not downloaded_files['animated_gif'].startswith('['):
+        gif_filename = downloaded_files['animated_gif']
+        # Extract character from filename for alt text (e.g., "21710.gif" -> character from context)
+        html_parts.append(f'<img alt="Stroke Order Animation" src="{gif_filename}">')
+    
+    # Add step-by-step PNG if available
+    if downloaded_files.get('step_by_step') and not downloaded_files['step_by_step'].startswith('['):
+        png_filename = downloaded_files['step_by_step']
+        html_parts.append(f'<img alt="Standard stroke order" src="{png_filename}">')
+    
+    # Join with <br> if we have multiple images
+    if len(html_parts) > 1:
+        return '<br>'.join(html_parts)
+    elif len(html_parts) == 1:
+        return html_parts[0]
+    else:
+        return '[stroke order images not available]'
+
+# Updated fetch_stroke_order_data function
 def fetch_stroke_order_data(word):
-    """Fetch stroke order images from StrokeOrder.com"""
+    """Fetch stroke order images and download them locally"""
     # For compound words (more than 1 character), fetch stroke order for each character
     if len(word) > 1:
         click.echo(f"🖌️ Detected compound word '{word}' with {len(word)} characters")
         click.echo(f"📝 Fetching stroke order for each character: {' + '.join(list(word))}")
         
-        animated_gifs_html = []
-        step_by_step_html = []
+        all_downloaded_files = []
         
         for i, char in enumerate(word):
             click.echo(f"\n--- Processing character {i+1}/{len(word)}: '{char}' ---")
-            char_data = fetch_single_character_stroke_order(char)
+            char_stroke_data = fetch_single_character_stroke_order(char)
             
-            # Extract just the filename from the URL for the src attribute
-            if char_data['animated_gif'] != '[animated stroke order not found]':
-                gif_filename = char_data['animated_gif'].split('/')[-1]
-                animated_gifs_html.append(f'<img alt="{char} Stroke Order Animation" src="{gif_filename}">')
-            
-            if char_data['step_by_step'] != '[step-by-step guide not found]':
-                png_filename = char_data['step_by_step'].split('/')[-1]
-                step_by_step_html.append(f'<img alt="Standard stroke order for the Chinese character {char}" src="{png_filename}">')
+            # Download images for this character
+            downloaded_files = download_stroke_order_images(char_stroke_data)
+            all_downloaded_files.append(downloaded_files)
         
-        # Combine animated GIFs first, then step-by-step PNGs, separated by <br>
-        stroke_order_html = ""
-        if animated_gifs_html:
-            stroke_order_html += ''.join(animated_gifs_html)
-        if step_by_step_html:
-            if animated_gifs_html:
-                stroke_order_html += '<br>'
-            stroke_order_html += ''.join(step_by_step_html)
+        # Create combined HTML for all characters
+        html_parts = []
+        for downloaded_files in all_downloaded_files:
+            char_html = create_stroke_order_html_with_downloads(downloaded_files)
+            if not char_html.startswith('['):
+                html_parts.append(char_html)
         
         return {
-            'stroke_order_html': stroke_order_html if stroke_order_html else '[stroke order not available for compound words]'
+            'stroke_order_html': '<br>'.join(html_parts) if html_parts else '[stroke order not available for compound words]'
         }
     else:
-        # Single character - fetch normally
-        char_data = fetch_single_character_stroke_order(word)
+        # Single character - fetch and download normally
+        char_stroke_data = fetch_single_character_stroke_order(word)
         
-        stroke_order_html = ""
+        # Download images
+        downloaded_files = download_stroke_order_images(char_stroke_data)
         
-        # Add animated GIF
-        if char_data['animated_gif'] != '[animated stroke order not found]':
-            gif_filename = char_data['animated_gif'].split('/')[-1]
-            stroke_order_html += f'<img alt="{word} Stroke Order Animation" src="{gif_filename}">'
-        
-        # Add step-by-step PNG
-        if char_data['step_by_step'] != '[step-by-step guide not found]':
-            png_filename = char_data['step_by_step'].split('/')[-1]
-            if stroke_order_html:
-                stroke_order_html += '<br>'
-            stroke_order_html += f'<img alt="Standard stroke order for the Chinese character {word}" src="{png_filename}">'
+        # Create HTML with downloaded filenames
+        stroke_order_html = create_stroke_order_html_with_downloads(downloaded_files)
         
         return {
-            'stroke_order_html': stroke_order_html if stroke_order_html else '[stroke order not available]'
+            'stroke_order_html': stroke_order_html
         }
 
 def fetch_single_character_stroke_order(char):
@@ -130,70 +217,108 @@ def parse_stroke_order_html(html_content, base_url):
         content_divs = soup.find_all('div', class_='stroke-article-content')
         click.echo(f"🔍 Found {len(content_divs)} stroke-article-content divs")
         
-        for div in content_divs:
+        # DEBUG: Let's see all images we find
+        all_images = soup.find_all('img')
+        click.echo(f"🔍 DEBUG: Found {len(all_images)} total images on page")
+        
+        for i, img in enumerate(all_images):
+            src = img.get('src', '')
+            alt = img.get('alt', '')
+            title = img.get('title', '')
+            click.echo(f"🖼️ DEBUG Image {i}: src='{src}', alt='{alt}', title='{title}'")
+        
+        for div_idx, div in enumerate(content_divs):
             img = div.find('img')
             if img:
                 src = img.get('src', '')
                 alt = img.get('alt', '')
                 title = img.get('title', '')
                 
-                click.echo(f"🖼️ Found image: src='{src}', alt='{alt}', title='{title}'")
+                click.echo(f"🖼️ Processing div {div_idx}: src='{src}', alt='{alt}', title='{title}'")
+                
+                # More robust filename extraction
+                filename = ''
+                if src:
+                    # Handle different src formats
+                    if '/' in src:
+                        filename = src.split('/')[-1]
+                    else:
+                        filename = src
+                    click.echo(f"📁 Extracted filename: '{filename}'")
                 
                 # Check for animated stroke order GIF
-                if 'stroke order animation' in alt.lower() or 'stroke order animation' in title.lower():
-                    # Convert relative path to absolute URL
-                    if src.startswith('./'):
-                        # Remove the ./ and any path components, keep just the filename
-                        filename = src.split('/')[-1]
-                        animated_gif = f"https://www.strokeorder.com/assets/bishun/gif/{filename}"
-                    elif src.startswith('/'):
-                        animated_gif = f"https://www.strokeorder.com{src}"
-                    else:
-                        animated_gif = src
-                    click.echo(f"🎬 Found animated stroke order: {animated_gif}")
+                # Look for .gif files OR specific alt/title text
+                is_animation = (
+                    filename.endswith('.gif') or
+                    'animation' in alt.lower() or 
+                    'animation' in title.lower() or
+                    'stroke order animation' in alt.lower() or
+                    'stroke order animation' in title.lower()
+                )
                 
-                # Check for step-by-step handwriting guide (standard stroke order)
-                elif 'standard stroke order' in alt.lower() or 'standard stroke order' in title.lower():
-                    # Convert relative path to absolute URL
-                    if src.startswith('./'):
-                        # Remove the ./ and any path components, keep just the filename
-                        filename = src.split('/')[-1]
-                        step_by_step = f"https://www.strokeorder.com/assets/bishun/png/{filename}"
-                    elif src.startswith('/'):
-                        step_by_step = f"https://www.strokeorder.com{src}"
+                if is_animation and not animated_gif:
+                    if filename.endswith('.gif'):
+                        animated_gif = f"https://www.strokeorder.com/assets/bishun/animation/{filename}"
+                        click.echo(f"🎬 Found animated stroke order: {animated_gif}")
                     else:
-                        step_by_step = src
-                    click.echo(f"📝 Found step-by-step guide: {step_by_step}")
+                        click.echo(f"⚠️ Found animation indicator but no .gif file: {filename}")
+                
+                # Check for step-by-step handwriting guide  
+                # Look for .png files with (1) OR specific alt/title text
+                is_step_by_step = (
+                    ('(1).png' in filename) or
+                    'standard stroke order' in alt.lower() or
+                    'standard stroke order' in title.lower() or
+                    'handwriting guide' in alt.lower() or
+                    'handwriting guide' in title.lower() or
+                    'step-by-step' in alt.lower() or
+                    'step-by-step' in title.lower()
+                )
+                
+                if is_step_by_step and not step_by_step:
+                    if filename.endswith('.png'):
+                        step_by_step = f"https://www.strokeorder.com/assets/bishun/guide/{filename}"
+                        click.echo(f"📝 Found step-by-step guide: {step_by_step}")
+                    else:
+                        click.echo(f"⚠️ Found step-by-step indicator but no .png file: {filename}")
         
-        # Fallback: if we didn't find them by alt text, look for .gif and .png files
+        # Enhanced fallback with better debugging
         if not animated_gif or not step_by_step:
-            click.echo("🔍 Fallback: searching for stroke order images by file patterns...")
+            click.echo("🔍 Fallback: Enhanced image search across all images...")
             
-            all_images = soup.find_all('img')
+            # Search ALL images on the page, not just in content divs
             for img in all_images:
                 src = img.get('src', '')
-                if src:
-                    # Look for animated GIF
-                    if not animated_gif and src.endswith('.gif'):
-                        if src.startswith('./'):
-                            filename = src.split('/')[-1]
-                            animated_gif = f"https://www.strokeorder.com/assets/bishun/gif/{filename}"
-                        elif src.startswith('/'):
-                            animated_gif = f"https://www.strokeorder.com{src}"
-                        else:
-                            animated_gif = src
-                        click.echo(f"🎬 Found animated stroke order by pattern: {animated_gif}")
+                if not src:
+                    continue
                     
-                    # Look for step-by-step PNG (look for patterns like "23383(1).png")
-                    elif not step_by_step and src.endswith('.png') and '(' in src:
-                        if src.startswith('./'):
-                            filename = src.split('/')[-1]
-                            step_by_step = f"https://www.strokeorder.com/assets/bishun/png/{filename}"
-                        elif src.startswith('/'):
-                            step_by_step = f"https://www.strokeorder.com{src}"
-                        else:
-                            step_by_step = src
-                        click.echo(f"📝 Found step-by-step guide by pattern: {step_by_step}")
+                filename = src.split('/')[-1] if '/' in src else src
+                click.echo(f"🔍 Fallback checking: {filename}")
+                
+                # Look for stroke order GIF pattern (numbers.gif)
+                if not animated_gif and filename.endswith('.gif'):
+                    import re
+                    # Match pure number.gif patterns (21710.gif, 23383.gif, etc.)
+                    if re.match(r'^\d+\.gif$', filename):
+                        animated_gif = f"https://www.strokeorder.com/assets/bishun/animation/{filename}"
+                        click.echo(f"🎬 Fallback found animated: {animated_gif}")
+                
+                # Look for step-by-step PNG pattern (numbers(1).png)  
+                if not step_by_step and filename.endswith('.png'):
+                    import re
+                    # Match number(1).png patterns (21710(1).png, 23383(1).png, etc.)
+                    if re.match(r'^\d+\(1\)\.png$', filename):
+                        step_by_step = f"https://www.strokeorder.com/assets/bishun/guide/{filename}"
+                        click.echo(f"📝 Fallback found step-by-step: {step_by_step}")
+                
+                # Stop if we found both
+                if animated_gif and step_by_step:
+                    break
+        
+        # Final debug output
+        click.echo(f"🎯 FINAL RESULTS:")
+        click.echo(f"   Animated GIF: {animated_gif if animated_gif else '[NOT FOUND]'}")
+        click.echo(f"   Step-by-step: {step_by_step if step_by_step else '[NOT FOUND]'}")
         
         return {
             'animated_gif': animated_gif if animated_gif else '[animated stroke order not found]',
@@ -215,8 +340,8 @@ def parse_dong_chinese_html(html_content):
         click.echo("🔍 Looking for JSON data in HTML...")
         
         # Look for the preloaded JSON data in the script tag
-        # Pattern: window.preloadedData=[{...}]
-        json_match = re.search(r'window\.preloadedData=(\[.*?\]);', html_content, re.DOTALL)
+        # Pattern: window.preloadedData=[{...}] or window.preloadedData={...}
+        json_match = re.search(r'window\.preloadedData=(\[.*?\]|\{.*?\});', html_content, re.DOTALL)
         
         if json_match:
             click.echo("✅ Found JSON match!")
@@ -224,9 +349,53 @@ def parse_dong_chinese_html(html_content):
             click.echo(f"📄 JSON string preview: {json_string[:200]}...")
             
             data = json.loads(json_string)
-            click.echo(f"📊 Parsed data type: {type(data)}, length: {len(data) if data else 0}")
+            click.echo(f"📊 Parsed data type: {type(data)}")
             
-            if data and len(data) > 0:
+            # Handle single character data (object format)
+            if isinstance(data, dict):
+                click.echo("🔤 Processing single character data...")
+                click.echo(f"🎯 Character data keys: {list(data.keys())}")
+                
+                pinyin = ''
+                meaning = ''
+                
+                # Get pinyin from pinyinFrequencies
+                if 'pinyinFrequencies' in data and len(data['pinyinFrequencies']) > 0:
+                    pinyin = data['pinyinFrequencies'][0].get('pinyin', '')
+                    click.echo(f"📝 Found pinyin: '{pinyin}'")
+                
+                # Get meaning from gloss
+                if 'gloss' in data:
+                    meaning = data['gloss']
+                    click.echo(f"📚 Found gloss: '{meaning}'")
+                
+                # If no gloss, try to get from words array
+                if not meaning and 'words' in data and len(data['words']) > 0:
+                    # Look for the word that matches the character
+                    char = data.get('char', '')
+                    for word_entry in data['words']:
+                        if word_entry.get('simp') == char or word_entry.get('trad') == char:
+                            if 'items' in word_entry and len(word_entry['items']) > 0:
+                                definitions = word_entry['items'][0].get('definitions', [])
+                                if definitions:
+                                    meaning = '; '.join(definitions)
+                                    click.echo(f"📚 Found definitions from words: '{meaning}'")
+                                    break
+                            elif 'gloss' in word_entry:
+                                meaning = word_entry['gloss']
+                                click.echo(f"📖 Found gloss from words: '{meaning}'")
+                                break
+                
+                click.echo(f"✅ Single character result - Pinyin: '{pinyin}', Meaning: '{meaning}'")
+                
+                return {
+                    'pinyin': pinyin if pinyin else '[pinyin not found]',
+                    'meaning': meaning if meaning else '[meaning not found]'
+                }
+            
+            # Handle compound word data (array format)
+            elif isinstance(data, list) and len(data) > 0:
+                click.echo("🔤 Processing compound word data...")
                 word_data = data[0]
                 click.echo(f"🎯 Word data keys: {list(word_data.keys())}")
                 
@@ -250,12 +419,16 @@ def parse_dong_chinese_html(html_content):
                     meaning = word_data['gloss']
                     click.echo("📖 Using gloss as fallback")
                 
-                click.echo(f"✅ Final result - Pinyin: '{pinyin}', Meaning: '{meaning}'")
+                click.echo(f"✅ Compound word result - Pinyin: '{pinyin}', Meaning: '{meaning}'")
                 
                 return {
                     'pinyin': pinyin if pinyin else '[pinyin not found]',
                     'meaning': meaning if meaning else '[meaning not found]'
                 }
+            
+            else:
+                click.echo("❌ Unexpected data format")
+                
         else:
             click.echo("❌ No JSON match found")
             
@@ -392,10 +565,10 @@ def main():
             # Fetch data from Dong Chinese
             dong_data = fetch_dong_chinese_data(word)
             
-            # Fetch stroke order data
+            # Fetch stroke order data AND download images
             stroke_data = fetch_stroke_order_data(word)
             
-            # Create a card with real pinyin, meaning, and stroke order data
+            # Create a card with real pinyin, meaning, and downloaded stroke order images
             card_data = create_anki_card_output(
                 hanzi=word,
                 yingyu=dong_data['meaning'],
@@ -414,13 +587,19 @@ def main():
             if click.confirm("\nSave cards to import file and exit?", default=False):
                 filename = create_anki_import_file(all_cards)
                 click.echo(f"✅ Saved {len(all_cards)} card(s) to {filename}")
-                click.echo("You can import this file into Anki!")
+                click.echo("📁 Image files are in the 'stroke_order_images' directory")
+                click.echo("📋 Copy the image files to your Anki media folder before importing!")
+                click.echo("   Anki media folder is usually at:")
+                click.echo("   • Windows: %APPDATA%\\Anki2\\[Profile]\\collection.media\\")
+                click.echo("   • Mac: ~/Library/Application Support/Anki2/[Profile]/collection.media/")
+                click.echo("   • Linux: ~/.local/share/Anki2/[Profile]/collection.media/")
                 break
             
         except KeyboardInterrupt:
             if all_cards and click.confirm("\n💾 Save cards before exiting?", default=True):
                 filename = create_anki_import_file(all_cards)
                 click.echo(f"✅ Saved {len(all_cards)} card(s) to {filename}")
+                click.echo("📁 Don't forget to copy images from 'stroke_order_images' to Anki!")
             click.echo("\n👋 Goodbye!")
             break
 
