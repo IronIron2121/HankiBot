@@ -21,7 +21,7 @@ def fetch_dong_chinese_data(word):
     try:
         url = f"https://www.dong-chinese.com/wiki/{quote(word)}"
         click.echo(f"🔍 Fetching from Dong Chinese: {word}")
-        
+    
         response = requests.get(url, headers=HEADERS, timeout=10)
         response.raise_for_status()
         
@@ -107,18 +107,18 @@ def fallback_html_parsing(html_content):
 
 def create_anki_card(hanzi, dong_data):
     """Create Anki card data - stroke orders will be handled by the card template"""
+    wordType = "Single" if len(hanzi) == 1 else "Compound"
     return {
         'guid': str(uuid.uuid4()).replace('-', '')[:10],
         'note_type': 'Mandarin Learning (With Example)',
-        'deck': 'Mandarin::Words::Compound',
+        'deck': f'Mandarin::Words::{wordType}',
         '汉字': hanzi,
         '拼音': dong_data['pinyin'],
         '发音': '[audio placeholder]',
         '英语': dong_data['meaning'],
         'Lì zi (Zhōngwén)': '[example placeholder]',
         'Character Explanation': '[explanation placeholder]',
-        'Stroke Orders': '[handled by card template]',  # Not used anymore
-        'tags': 'Mandarin::Words::Compound'
+        'tags': f'Mandarin::Words::{wordType}'
     }
 
 def display_card(card_data):
