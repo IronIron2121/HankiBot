@@ -1,6 +1,14 @@
-TODO:
+# Chinese Anki Bot - Roadmap
 
-- Automatically grab speech pronunciations (maybe TTS or other copyright free options)
-- Automatically grab examples of word usage (perhaps deepseek?)
-- Automatically grab character explanations
-- Allow manual override of stroke orders
+## ✅ Done
+- [x] Fetch pinyin and meanings from Dong Chinese
+- [x] Handle single characters and compound words  
+- [x] Generate Anki import files
+- [x] Dynamic stroke order images (web-based)
+- [x] CLI interface with error handling
+
+## 🔄 TODO
+- [ ] **Audio pronunciations** - TTS or copyright-free audio sources
+- [ ] **Example sentences** - Word usage examples (maybe DeepSeek API?)
+- [ ] **Character explanations** - Etymology and component breakdowns
+- [ ] **Manual stroke order override** - Custom image URLs when needed
