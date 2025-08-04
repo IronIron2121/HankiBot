@@ -6,9 +6,9 @@
 - [x] Generate Anki import files
 - [x] Dynamic stroke order images (web-based)
 - [x] CLI interface with error handling
+- [x]  Character explanations - Etymology and component breakdowns
 
 ## 🔄 TODO
 - [ ] **Audio pronunciations** - TTS or copyright-free audio sources
 - [ ] **Example sentences** - Word usage examples (maybe DeepSeek API?)
-- [ ] **Character explanations** - Etymology and component breakdowns
 - [ ] **Manual stroke order override** - Custom image URLs when needed
