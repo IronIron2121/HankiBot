@@ -191,7 +191,7 @@ def create_anki_card(hanzi, dong_data):
     wordType = "Single" if len(hanzi) == 1 else "Compound"
     return {
         'guid': str(uuid.uuid4()).replace('-', '')[:10],
-        'note_type': 'Mandarin Learning (Online)',
+        'note_type': 'Mandarin Learning (Online Stroke Order)',
         'deck': f'Mandarin::Words::{wordType}',
         '汉字': hanzi,
         '拼音': dong_data['pinyin'],
