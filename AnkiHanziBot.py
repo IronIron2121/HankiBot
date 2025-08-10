@@ -11,16 +11,54 @@ import json
 import traceback
 from urllib.parse import quote
 from bs4 import BeautifulSoup
+from openai import OpenAI
 
-config = {
-    #"DEFINITION_MODE": "ADVANCED",
-    "DEFINITION_MODE": "SIMPLE",
-}
+try:
+    from config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEFAULT_EXAMPLES_COUNT, DEFAULT_PROMPT
+except ImportError:
+    print("❌ Error: config.py file not found!")
+    print("Please create a config.py file with your API keys.")
+    print("See config.example.py for the required format.")
+    exit(1)
+
+# Initialize OpenAI client
+client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
 
 # Configuration
+config = {
+    "DEFINITION_MODE": "SIMPLE",  # or "ADVANCED"
+}
+
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
 }
+
+
+def generate_examples_with_deepseek(word, meaning=None, count=None):
+    """Generate example sentences using DeepSeek API"""
+    if not DEEPSEEK_API_KEY:
+        click.echo("❌ DeepSeek API key not configured")
+        return "[example not available - no API key]"
+    
+    print("\nGenerating examples with DeepSeek 🤖💬...")
+    
+    count = count or DEFAULT_EXAMPLES_COUNT
+    
+    response = client.chat.completions.create(
+        model="deepseek-chat",
+        messages=[
+            DEFAULT_PROMPT,
+            {"role": "user", "content": word}
+        ],
+        stream=False
+    )
+
+    examples = response.choices[0].message.content
+    print(examples)
+    print("With...")
+    print(DEFAULT_PROMPT)
+    return examples
+
 
 def fetch_dong_chinese_data(word):
     """Fetch pinyin and meaning from Dong Chinese"""
@@ -36,6 +74,7 @@ def fetch_dong_chinese_data(word):
     except requests.RequestException as e:
         click.echo(f"❌ Error fetching data: {e}", err=True)
         return {'pinyin': '[error]', 'meaning': '[error]', 'etymology': '[error]'}
+
 
 def fetch_single_character_data(char):
     """Fetch data for a single character only - no recursion"""
@@ -70,6 +109,7 @@ def fetch_single_character_data(char):
         click.echo(f"⚠️ Error fetching data for {char}: {e}")
         return None
 
+
 def create_compound_etymology(compound_word):
     """Create etymology breakdown for compound words"""
     etymology_parts = []
@@ -83,12 +123,13 @@ def create_compound_etymology(compound_word):
         if char_data:
             part = f"{char_data['char']} ({char_data['pinyin']}) - {char_data['meaning']}"
             if char_data['hint']:
-                part += f" | {char_data['hint']}"
+                part += f"<br>{char_data['hint']}"
             etymology_parts.append(part)
         else:
             etymology_parts.append(f"{char} - [data not found]")
     
-    return " || MANUALLY ENTER NEW-LINE HERE || ".join(etymology_parts)
+    return "<br><br>".join(etymology_parts)
+
 
 def parse_dong_chinese_html(html_content):
     """Parse HTML content from Dong Chinese to extract pinyin and meaning"""
@@ -103,7 +144,7 @@ def parse_dong_chinese_html(html_content):
         click.echo("✅ JSON match found!")
         data = json.loads(json_match.group(1))
         
-        # Initialize variables to avoid scope issues
+        # Initialize variables
         pinyin = ''
         meaning = ''
         etymology = ''
@@ -162,6 +203,7 @@ def parse_dong_chinese_html(html_content):
         click.echo(f"📋 Full error: {traceback.format_exc()}")
         return {'pinyin': '[error]', 'meaning': '[error]', 'etymology': '[error]'}
 
+
 def fallback_html_parsing(html_content):
     """Fallback HTML parsing for pinyin when JSON is not available"""
     try:
@@ -186,21 +228,23 @@ def fallback_html_parsing(html_content):
     except Exception:
         return {'pinyin': '[error]', 'meaning': '[error]', 'etymology': '[error]'}
 
+
 def create_anki_card(hanzi, dong_data):
     """Create Anki card data - stroke orders will be handled by the card template"""
-    wordType = "Single" if len(hanzi) == 1 else "Compound"
+    word_type = "Single" if len(hanzi) == 1 else "Compound"
     return {
         'guid': str(uuid.uuid4()).replace('-', '')[:10],
         'note_type': 'Mandarin Learning (Online Stroke Order)',
-        'deck': f'Mandarin::Words::{wordType}',
+        'deck': f'Mandarin::Words::{word_type}',
         '汉字': hanzi,
         '拼音': dong_data['pinyin'],
         '发音': '[audio placeholder]',
         '英语': dong_data['meaning'],
-        'Lì zi (Zhōngwén)': '[example placeholder]',
+        'Lì zi (Zhōngwén)': generate_examples_with_deepseek(hanzi),
         'Character Explanation': dong_data['etymology'],
-        'tags': f'Mandarin::Words::{wordType}'
+        'tags': f'Mandarin::Words::{word_type}'
     }
+
 
 def display_card(card_data):
     """Display the card data"""
@@ -211,7 +255,9 @@ def display_card(card_data):
     click.echo(f"拼音: {card_data['拼音']}")
     click.echo(f"英语: {card_data['英语']}")
     click.echo(f"Character Explanation: {card_data['Character Explanation']}")
+    click.echo(f"Example: {card_data['Lì zi (Zhōngwén)']}")
     click.echo("🖌️ Stroke orders: Will be loaded dynamically by card template")
+
 
 def save_cards(cards):
     """Save cards to Anki import file"""
@@ -229,6 +275,7 @@ def save_cards(cards):
             f.write('\t'.join(fields) + '\n')
     
     return "anki_import.txt"
+
 
 @click.command()
 def main():
@@ -265,6 +312,7 @@ def main():
                 click.echo(f"✅ Saved {len(all_cards)} card(s) to {filename}")
             click.echo("\n👋 Goodbye!")
             break
+
 
 if __name__ == "__main__":
     main()
