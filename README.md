@@ -16,3 +16,4 @@
 * \[ ] **Better formatting for Etymologies** - Bolded 汉字, italics for definitions, etc
 * \[ ] **Manual stroke order override** - Custom image URLs when needed
 * \[ ] **Definition Disambiguation** - prompt users to select between multiple OR all definitions of polysemantic words
+  * \[ ] **Examples based on disambiguation** - prompt Deepseek to create examples based on a specific usage / chosen usages of a given word
