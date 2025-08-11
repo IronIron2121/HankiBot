@@ -1,4 +1,4 @@
-# Chinese Anki Bot - Roadmap
+# Hanki Bot - Roadmap
 
 ## ✅ Done
 
