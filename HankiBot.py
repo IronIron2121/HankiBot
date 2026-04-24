@@ -16,7 +16,7 @@ from openai import OpenAI
 try:
     from config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEFAULT_EXAMPLES_COUNT, DEFAULT_PROMPT
 except ImportError:
-    print("❌ Error: config.py file not found!")
+    print("Error: config.py file not found!")
     print("Please create a config.py file with your API keys.")
     print("See config.example.py for the required format.")
     exit(1)
@@ -33,14 +33,13 @@ HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
 }
 
-
 def generate_examples_with_deepseek(word, meaning=None, count=None):
     """Generate example sentences using DeepSeek API"""
     if not DEEPSEEK_API_KEY:
-        click.echo("❌ DeepSeek API key not configured")
+        click.echo("DeepSeek API key not configured")
         return "[example not available - no API key]"
     
-    print("\nGenerating examples with DeepSeek 🤖💬...")
+    print("\nGenerating examples with DeepSeek...")
     
     count = count or DEFAULT_EXAMPLES_COUNT
     
@@ -54,6 +53,7 @@ def generate_examples_with_deepseek(word, meaning=None, count=None):
     )
 
     examples = response.choices[0].message.content
+    
     print(examples)
     print("With...")
     print(DEFAULT_PROMPT)
@@ -64,7 +64,7 @@ def fetch_dong_chinese_data(word):
     """Fetch pinyin and meaning from Dong Chinese"""
     try:
         url = f"https://www.dong-chinese.com/wiki/{quote(word)}"
-        click.echo(f"🔍 Fetching from Dong Chinese: {word}")
+        click.echo(f"Fetching from Dong Chinese: {word}")
     
         response = requests.get(url, headers=HEADERS, timeout=10)
         response.raise_for_status()
@@ -72,7 +72,7 @@ def fetch_dong_chinese_data(word):
         return parse_dong_chinese_html(response.text)
         
     except requests.RequestException as e:
-        click.echo(f"❌ Error fetching data: {e}", err=True)
+        click.echo(f"Error fetching data: {e}", err=True)
         return {'pinyin': '[error]', 'meaning': '[error]', 'etymology': '[error]'}
 
 
@@ -106,7 +106,7 @@ def fetch_single_character_data(char):
         return None
         
     except Exception as e:
-        click.echo(f"⚠️ Error fetching data for {char}: {e}")
+        click.echo(f"Error fetching data for {char}: {e}")
         return None
 
 
@@ -114,10 +114,10 @@ def create_compound_etymology(compound_word):
     """Create etymology breakdown for compound words"""
     etymology_parts = []
     
-    click.echo(f"🔍 Building etymology for compound word: {' + '.join(compound_word)}")
+    click.echo(f"Building etymology for compound word: {' + '.join(compound_word)}")
     
     for i, char in enumerate(compound_word):
-        click.echo(f"  📖 Looking up character {i+1}/{len(compound_word)}: {char}")
+        click.echo(f"  Looking up character {i+1}/{len(compound_word)}: {char}")
         
         char_data = fetch_single_character_data(char)
         if char_data:
@@ -138,10 +138,10 @@ def parse_dong_chinese_html(html_content):
         json_match = re.search(r'window\.preloadedData=(\[.*?\]|\{.*?\});', html_content, re.DOTALL)
         
         if not json_match:
-            click.echo("⚠️ No JSON data found, trying HTML parsing...")
+            click.echo("No JSON data found, trying HTML parsing...")
             return fallback_html_parsing(html_content)
         
-        click.echo("✅ JSON match found!")
+        click.echo("JSON match found!")
         data = json.loads(json_match.group(1))
         
         # Initialize variables
@@ -169,7 +169,7 @@ def parse_dong_chinese_html(html_content):
                             meaning = word_entry['gloss']
                             break
             else:
-                click.echo("📚 Got main meaning!")
+                click.echo("Got main meaning!")
                             
         elif isinstance(data, list) and data:
             word_data = data[0]
@@ -199,8 +199,8 @@ def parse_dong_chinese_html(html_content):
         }
         
     except Exception as e:
-        click.echo(f"⚠️ Error parsing Dong Chinese data: {e}")
-        click.echo(f"📋 Full error: {traceback.format_exc()}")
+        click.echo(f"Error parsing Dong Chinese data: {e}")
+        click.echo(f"Full error: {traceback.format_exc()}")
         return {'pinyin': '[error]', 'meaning': '[error]', 'etymology': '[error]'}
 
 
@@ -249,14 +249,14 @@ def create_anki_card(hanzi, dong_data):
 def display_card(card_data):
     """Display the card data"""
     click.echo("\n" + "="*60)
-    click.echo("📚 ANKI CARD")
+    click.echo("ANKI CARD")
     click.echo("="*60)
     click.echo(f"汉字: {card_data['汉字']}")
     click.echo(f"拼音: {card_data['拼音']}")
     click.echo(f"英语: {card_data['英语']}")
     click.echo(f"Character Explanation: {card_data['Character Explanation']}")
     click.echo(f"Example: {card_data['Lì zi (Zhōngwén)']}")
-    click.echo("🖌️ Stroke orders: Will be loaded dynamically by card template")
+    click.echo("Stroke orders: Will be loaded dynamically by card template")
 
 
 def save_cards(cards):
@@ -280,9 +280,9 @@ def save_cards(cards):
 @click.command()
 def main():
     """Chinese Anki Bot - Create Anki cards from Chinese words"""
-    click.echo("🎌 Welcome to Chinese Anki Bot!")
-    click.echo("📱 Stroke orders will be loaded dynamically from the web")
-    click.echo("🧠 Etymology breakdowns for compound words")
+    click.echo("Welcome to Chinese Anki Bot!")
+    click.echo("Stroke orders will be loaded dynamically from the web")
+    click.echo("Etymology breakdowns for compound words")
     click.echo("Enter Chinese words to create Anki cards (Ctrl+C to exit)\n")
     
     all_cards = []
@@ -302,15 +302,15 @@ def main():
             # Save option
             if click.confirm("\nSave cards and exit?", default=False):
                 filename = save_cards(all_cards)
-                click.echo(f"✅ Saved {len(all_cards)} card(s) to {filename}")
-                click.echo("🌐 Stroke orders will load automatically from strokeorder.com")
+                click.echo(f"Saved {len(all_cards)} card(s) to {filename}")
+                click.echo("Stroke orders will load automatically from strokeorder.com")
                 break
             
         except KeyboardInterrupt:
-            if all_cards and click.confirm("\n💾 Save cards before exiting?", default=True):
+            if all_cards and click.confirm("\nSave cards before exiting?", default=True):
                 filename = save_cards(all_cards)
-                click.echo(f"✅ Saved {len(all_cards)} card(s) to {filename}")
-            click.echo("\n👋 Goodbye!")
+                click.echo(f"Saved {len(all_cards)} card(s) to {filename}")
+            click.echo("\nGoodbye!")
             break
 
 
