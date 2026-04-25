@@ -1,6 +1,6 @@
 # Hanki Bot - Roadmap
 
-## ✅ Done
+## Done
 
 * \[x] Fetch pinyin and meanings from Dong Chinese
 * \[x] Handle single characters and compound words
@@ -10,7 +10,7 @@
 * \[x] Character explanations - Etymology and component breakdowns for single and compound words
 * \[x] Example sentences - Word usage examples from DeepSeek API
 
-## 🔄 TODO
+## TODO
 
 * \[ ] **Audio pronunciations** - TTS or copyright-free audio sources
 * \[ ] **Better formatting for Etymologies** - Bolded 汉字, italics for definitions, etc
